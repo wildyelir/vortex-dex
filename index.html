@@ -23,13 +23,18 @@
             background: rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
+        .balance-text {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+        }
     </style>
 </head>
 <body class="min-h-screen gradient-bg text-white">
     <!-- Navbar -->
     <nav class="container mx-auto px-4 py-6 flex justify-between items-center">
         <div class="flex items-center space-x-2">
-            <img src="https://tokens.app.pulsex.com/images/tokens/0x95B303987A60C71504D99Aa1b13B4DA07b0790ab.png" alt="PulseX Logo" class="w-10 h-10">
+            <div class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm">VX</div>
             <span class="text-2xl font-bold">VorteX</span>
         </div>
         
@@ -42,7 +47,7 @@
         
         <div class="flex items-center">
             <button class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg font-medium flex items-center">
-                <i data-feather="wallet" class="mr-2"></i>
+                <i data-feather="credit-card" class="mr-2"></i>
                 Connect Wallet
             </button>
         </div>
@@ -61,46 +66,50 @@
             
             <!-- You Pay Section -->
             <div class="mb-4">
-                <div class="flex justify-between text-sm mb-2">
-                    <span>You pay</span>
-                    <span>Balance: 0</span>
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-sm font-medium text-white/90">You pay</span>
+                    <span class="balance-text">Balance: 0</span>
                 </div>
                 <div class="token-input rounded-xl p-4 flex justify-between items-center">
                     <input type="number" placeholder="0.0" class="bg-transparent w-full text-2xl focus:outline-none">
                     <div class="flex items-center space-x-2 bg-white/10 px-3 py-2 rounded-lg">
-                        <img src="https://i.imgur.com/S2AMd8G.png" alt="CVM" class="w-9 h-9">
-                        <span>CVM</span>
+                        <div class="w-9 h-9 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-xs">CVX</div>
+                        <span>CVX</span>
                         <i data-feather="chevron-down" class="w-4 h-4"></i>
                     </div>
                 </div>
             </div>
             
             <!-- Swap Arrow -->
-            <div class="flex justify-center my-2">
-                <button class="bg-purple-600 hover:bg-purple-700 p-2 rounded-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="m7.75 5.75-3-3-3 3m3 7.5v-10.5m9.5 7.5-3 3-3-3m3-7.5v10.5"/></svg>
+            <div class="flex justify-center my-4">
+                <button class="bg-purple-600 hover:bg-purple-700 p-2 rounded-full transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+                        <path d="m7.75 5.75-3-3-3 3m3 7.5v-10.5m9.5 7.5-3 3-3-3m3-7.5v10.5"/>
+                    </svg>
                 </button>
             </div>
             
             <!-- You Receive Section -->
             <div class="mb-6">
-                <div class="flex justify-between text-sm mb-2">
-                    <span>You receive</span>
-                    <span>Balance: 0</span>
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-sm font-medium text-white/90">You receive</span>
+                    <span class="balance-text">Balance: 0</span>
                 </div>
                 <div class="token-input rounded-xl p-4 flex justify-between items-center">
                     <input type="number" placeholder="0.0" class="bg-transparent w-full text-2xl focus:outline-none">
                     <div class="flex items-center space-x-2 bg-white/10 px-3 py-2 rounded-lg">
-                        <img src="https://i.imgur.com/W5ISYzO.png" alt="PAI" class="w-9 h-9">
+                        <div class="w-9 h-9 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-xs">PAI</div>
                         <span>PAI</span>
                         <i data-feather="chevron-down" class="w-4 h-4"></i>
                     </div>
                 </div>
             </div>
             
-            <!-- Connect Wallet Button -->
-            <button class="w-full bg-purple-600 hover:bg-purple-700 py-4 rounded-xl font-medium flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" class="mr-2"><path d="m7.75 5.75-3-3-3 3m3 7.5v-10.5m9.5 7.5-3 3-3-3m3-7.5v10.5"/></svg>
+            <!-- Swap Button -->
+            <button class="w-full bg-purple-600 hover:bg-purple-700 py-4 rounded-xl font-medium flex items-center justify-center transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" class="mr-2">
+                    <path d="m7.75 5.75-3-3-3 3m3 7.5v-10.5m9.5 7.5-3 3-3-3m3-7.5v10.5"/>
+                </svg>
                 Swap
             </button>
         </div>
@@ -142,6 +151,10 @@
         <p>© 2025 VorteX. All rights reserved.</p>
     </footer>
 
+    <!-- VorteX Convex Integration -->
+    <script src="convex-client.js"></script>
+    <script src="vortex-interface.js"></script>
+    
     <script>
         AOS.init();
         feather.replace();
