@@ -3,12 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VorteX - Decentralized Exchange</title>
+    <title>VorteX - Convex DEX</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
-    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- Ed25519 Signing Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
+    
     <style>
         .gradient-bg {
             background: linear-gradient(135deg, #6e00ff 0%, #ff00a8 100%);
@@ -23,10 +27,58 @@
             background: rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .balance-text {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.7);
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .status-connected { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+        .status-disconnected { background-color: #ef4444; box-shadow: 0 0 8px #ef4444; }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
             font-weight: 500;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .notification-success { background: rgba(16, 185, 129, 0.95); backdrop-filter: blur(10px); }
+        .notification-error { background: rgba(239, 68, 68, 0.95); backdrop-filter: blur(10px); }
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            animation: fadeIn 0.3s;
+        }
+        .modal-content {
+            background: linear-gradient(135deg, #2d1b69 0%, #1a0f3d 100%);
+            margin: 10% auto;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
     </style>
 </head>
@@ -34,21 +86,25 @@
     <!-- Navbar -->
     <nav class="container mx-auto px-4 py-6 flex justify-between items-center">
         <div class="flex items-center space-x-2">
-            <div class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm">VX</div>
+            <img src="https://tokens.app.pulsex.com/images/tokens/0x95B303987A60C71504D99Aa1b13B4DA07b0790ab.png" alt="VorteX Logo" class="w-10 h-10">
             <span class="text-2xl font-bold">VorteX</span>
         </div>
         
         <div class="hidden md:flex space-x-8 mx-auto">
             <a href="#" class="font-medium hover:text-purple-200 text-lg">Trade</a>
             <a href="#" class="font-medium hover:text-purple-200 text-lg">Liquidity</a>
-            <a href="#" class="font-medium hover:text-purple-200 text-lg">Buy Convex</a>
             <a href="#" class="font-medium hover:text-purple-200 text-lg">About</a>
         </div>
         
-        <div class="flex items-center">
-            <button class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg font-medium flex items-center">
-                <i data-feather="credit-card" class="mr-2"></i>
-                Connect Wallet
+        <div class="flex items-center space-x-4">
+            <div id="connectionStatus" class="text-sm hidden md:flex items-center">
+                <span class="status-indicator status-disconnected"></span>
+                <span>Disconnected</span>
+            </div>
+            
+            <button id="connectWalletBtn" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg font-medium flex items-center transition-all">
+                <i data-feather="wallet" class="mr-2"></i>
+                <span>Connect Account #132</span>
             </button>
         </div>
     </nav>
@@ -57,107 +113,578 @@
     <main class="container mx-auto px-4 py-12">
         <div class="max-w-md mx-auto card-glass rounded-2xl p-6 shadow-xl" data-aos="fade-up">
             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold">Swap</h2>
-                <button class="text-sm flex items-center">
-                    <i data-feather="settings" class="w-4 h-4 mr-1"></i>
-                    Settings
+                <h2 class="text-xl font-bold">Swap on Torus</h2>
+                <button id="refreshBtn" class="text-sm flex items-center hover:text-purple-200 transition-colors" title="Refresh balances">
+                    <i data-feather="refresh-cw" class="w-4 h-4"></i>
                 </button>
             </div>
             
             <!-- You Pay Section -->
             <div class="mb-4">
-                <div class="flex justify-between items-center mb-3">
-                    <span class="text-sm font-medium text-white/90">You pay</span>
-                    <span class="balance-text">Balance: 0</span>
+                <div class="flex justify-between text-sm mb-2">
+                    <span>You pay</span>
+                    <span id="fromBalance" class="cursor-pointer hover:text-purple-300" title="Click to use max">Balance: --</span>
                 </div>
                 <div class="token-input rounded-xl p-4 flex justify-between items-center">
-                    <input type="number" placeholder="0.0" class="bg-transparent w-full text-2xl focus:outline-none">
+                    <input 
+                        id="fromAmount" 
+                        type="number" 
+                        placeholder="0.0" 
+                        class="bg-transparent w-full text-2xl focus:outline-none"
+                        min="0"
+                        step="any"
+                    >
                     <div class="flex items-center space-x-2 bg-white/10 px-3 py-2 rounded-lg">
-                        <div class="w-9 h-9 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-xs">CVX</div>
-                        <span>CVX</span>
-                        <i data-feather="chevron-down" class="w-4 h-4"></i>
+                        <span id="fromTokenSymbol" class="font-medium">Token #207</span>
                     </div>
                 </div>
             </div>
             
             <!-- Swap Arrow -->
-            <div class="flex justify-center my-4">
-                <button class="bg-purple-600 hover:bg-purple-700 p-2 rounded-full transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
-                        <path d="m7.75 5.75-3-3-3 3m3 7.5v-10.5m9.5 7.5-3 3-3-3m3-7.5v10.5"/>
-                    </svg>
+            <div class="flex justify-center my-2">
+                <button id="swapDirectionBtn" class="bg-purple-600 hover:bg-purple-700 p-2 rounded-full transition-all" title="Reverse swap direction">
+                    <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="m7.75 5.75-3-3-3 3m3 7.5v-10.5m9.5 7.5-3 3-3-3m3-7.5v10.5"/></svg>
                 </button>
             </div>
             
             <!-- You Receive Section -->
             <div class="mb-6">
-                <div class="flex justify-between items-center mb-3">
-                    <span class="text-sm font-medium text-white/90">You receive</span>
-                    <span class="balance-text">Balance: 0</span>
+                <div class="flex justify-between text-sm mb-2">
+                    <span>You receive (estimated)</span>
+                    <span id="toBalance">Balance: --</span>
                 </div>
                 <div class="token-input rounded-xl p-4 flex justify-between items-center">
-                    <input type="number" placeholder="0.0" class="bg-transparent w-full text-2xl focus:outline-none">
+                    <input 
+                        id="toAmount" 
+                        type="number" 
+                        placeholder="0.0" 
+                        class="bg-transparent w-full text-2xl focus:outline-none"
+                        readonly
+                    >
                     <div class="flex items-center space-x-2 bg-white/10 px-3 py-2 rounded-lg">
-                        <div class="w-9 h-9 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-xs">PAI</div>
-                        <span>PAI</span>
-                        <i data-feather="chevron-down" class="w-4 h-4"></i>
+                        <span id="toTokenSymbol" class="font-medium">Token #130</span>
                     </div>
                 </div>
             </div>
             
             <!-- Swap Button -->
-            <button class="w-full bg-purple-600 hover:bg-purple-700 py-4 rounded-xl font-medium flex items-center justify-center transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" class="mr-2">
-                    <path d="m7.75 5.75-3-3-3 3m3 7.5v-10.5m9.5 7.5-3 3-3-3m3-7.5v10.5"/>
-                </svg>
-                Swap
+            <button 
+                id="swapBtn" 
+                class="w-full bg-purple-600 hover:bg-purple-700 py-4 rounded-xl font-medium flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" class="mr-2"><path d="m7.75 5.75-3-3-3 3m3 7.5v-10.5m9.5 7.5-3 3-3-3m3-7.5v10.5"/></svg>
+                <span id="swapBtnText">Connect to Swap</span>
             </button>
+            
+            <!-- Transaction Details -->
+            <div id="txDetails" class="mt-4 text-sm text-white/70 hidden">
+                <div class="flex justify-between mb-1">
+                    <span>Estimated Output:</span>
+                    <span id="estimatedOutput">--</span>
+                </div>
+                <div class="flex justify-between mb-1">
+                    <span>Liquidity Pool Fee:</span>
+                    <span id="poolFee">~0.6% (two 0.3% swaps)</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Network Fee:</span>
+                    <span id="networkFee">~0.001 CVX</span>
+                </div>
+            </div>
+            
+            <!-- CVX Balance Display -->
+            <div id="cvxBalance" class="mt-4 text-sm text-white/60 text-center hidden">
+                CVX Balance: <span id="cvxAmount">--</span> CVX
+            </div>
         </div>
     </main>
 
-    <!-- Mobile Menu -->
-    <div class="md:hidden fixed bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-4 flex justify-around">
-        <a href="#" class="flex flex-col items-center">
-            <i data-feather="repeat" class="w-5 h-5"></i>
-            <span class="text-xs mt-1">Trade</span>
-        </a>
-        <a href="#" class="flex flex-col items-center">
-            <i data-feather="layers" class="w-5 h-5"></i>
-            <span class="text-xs mt-1">Liquidity</span>
-        </a>
-        <a href="#" class="flex flex-col items-center">
-            <i data-feather="dollar-sign" class="w-5 h-5"></i>
-            <span class="text-xs mt-1">Buy Convex</span>
-        </a>
-        <a href="#" class="flex flex-col items-center">
-            <i data-feather="info" class="w-5 h-5"></i>
-            <span class="text-xs mt-1">About</span>
-        </a>
-    </div>
-
-    <!-- Footer Links -->
+    <!-- Footer -->
     <footer class="container mx-auto px-4 py-6 text-center text-sm text-white/70">
         <div class="flex justify-center space-x-6 mb-4">
-            <a href="https://github.com/Convex-Dev" target="_blank" class="hover:text-white">
-                <i data-feather="github" class="w-6 h-6"></i>
-            </a>
-            <a href="https://twitter.com/convex_world" target="_blank" class="hover:text-white">
-                <i data-feather="twitter" class="w-6 h-6"></i>
-            </a>
-            <a href="https://discord.com/invite/xfYGq4CT7v" target="_blank" class="hover:text-white">
-                <i data-feather="message-circle" class="w-6 h-6"></i>
-            </a>
+            <a href="https://github.com/convex-dev/convex" target="_blank" class="hover:text-white"><i data-feather="github" class="w-6 h-6"></i></a>
+            <a href="https://twitter.com/convex_dev" target="_blank" class="hover:text-white"><i data-feather="twitter" class="w-6 h-6"></i></a>
+            <a href="https://discord.gg/xfYGq4CT7v" target="_blank" class="hover:text-white"><i data-feather="message-circle" class="w-6 h-6"></i></a>
         </div>
-        <p>© 2025 VorteX. All rights reserved.</p>
+        <p>© 2025 VorteX. Powered by Convex & Torus DEX</p>
     </footer>
 
-    <!-- VorteX Convex Integration -->
-    <script src="convex-client.js"></script>
-    <script src="vortex-interface.js"></script>
-    
     <script>
+        // Initialize libraries
         AOS.init();
         feather.replace();
+
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        
+        const CONVEX_URL = 'http://peer.convex.live:8080';
+        
+        // Your Account Configuration
+        const ACCOUNT = {
+            address: '#132',
+            privateKey: 'be098ee58185fbf94455acc20f4922a6d6ceec9288c9fcd9de427a71f07c96ee',
+            publicKey: '0xB8e64c63464c047F82a64F193D68C1Ad870Df36B0C8E6E6d390Fc097CB87Ff34'
+        };
+        
+        // Token Configuration
+        const TOKENS = {
+            token207: { address: '#207', market: '#208', symbol: 'Token #207' },
+            token130: { address: '#130', market: '#131', symbol: 'Token #130' }
+        };
+        
+        let fromToken = 'token207';
+        let toToken = 'token130';
+        
+        // ============================================
+        // STATE
+        // ============================================
+        
+        let isConnected = false;
+        let userAddress = null;
+        let userPrivateKey = null;
+
+        console.log('🎉 VorteX DEX Initialized');
+        console.log('📡 Network:', CONVEX_URL);
+        console.log('👤 Account:', ACCOUNT.address);
+        console.log('🔗 Markets:', TOKENS.token207.market, TOKENS.token130.market);
+
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+        
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+        }
+        
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            const statusIndicator = statusElement.querySelector('.status-indicator');
+            const statusText = statusElement.querySelector('span:last-child');
+            
+            if (connected) {
+                statusIndicator.className = 'status-indicator status-connected';
+                statusText.textContent = 'Connected';
+            } else {
+                statusIndicator.className = 'status-indicator status-disconnected';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+        
+        function updateWalletButton(address) {
+            const btn = document.getElementById('connectWalletBtn');
+            const btnText = btn.querySelector('span');
+            
+            if (address) {
+                btnText.textContent = `Account ${address}`;
+                btn.classList.add('bg-green-600', 'hover:bg-green-700');
+                btn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+            } else {
+                btnText.textContent = 'Connect Account #132';
+                btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                btn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+            }
+        }
+        
+        function updateSwapButton() {
+            const swapBtn = document.getElementById('swapBtn');
+            const swapBtnText = document.getElementById('swapBtnText');
+            const fromAmount = document.getElementById('fromAmount').value;
+            
+            if (!isConnected) {
+                swapBtn.disabled = true;
+                swapBtnText.textContent = 'Connect to Swap';
+            } else if (!fromAmount || parseFloat(fromAmount) <= 0) {
+                swapBtn.disabled = true;
+                swapBtnText.textContent = 'Enter Amount';
+            } else {
+                swapBtn.disabled = false;
+                swapBtnText.textContent = 'Execute Swap on Torus';
+            }
+        }
+
+        // ============================================
+        // CRYPTOGRAPHIC SIGNING
+        // ============================================
+        
+        function hexToBytes(hex) {
+            hex = hex.replace(/^0x/, '');
+            if (hex.length % 2 !== 0) {
+                throw new Error('Hex string must have even length');
+            }
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes;
+        }
+        
+        function bytesToHex(bytes) {
+            return Array.from(bytes)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        async function signTransaction(hash, privateKey) {
+            try {
+                console.log('🔏 Signing transaction...');
+                
+                // Convert private key from hex to bytes (32 bytes seed)
+                const privateKeyBytes = hexToBytes(privateKey);
+                if (privateKeyBytes.length !== 32) {
+                    throw new Error(`Invalid private key length: ${privateKeyBytes.length} bytes (expected 32)`);
+                }
+                
+                // Generate the full keypair from the seed (this creates the 64-byte secret key)
+                const keyPair = nacl.sign.keyPair.fromSeed(privateKeyBytes);
+                
+                // Convert hash from hex to bytes
+                const hashBytes = hexToBytes(hash);
+                
+                console.log('🔑 Key info:');
+                console.log('  Seed (private key):', privateKeyBytes.length, 'bytes');
+                console.log('  Public key:', keyPair.publicKey.length, 'bytes');
+                console.log('  Secret key:', keyPair.secretKey.length, 'bytes');
+                console.log('  Hash:', hashBytes.length, 'bytes');
+                
+                // Sign with the full 64-byte secret key
+                const signature = nacl.sign.detached(hashBytes, keyPair.secretKey);
+                const signatureHex = bytesToHex(signature);
+                
+                console.log('✅ Signature generated:', signatureHex.substring(0, 20) + '...');
+                return signatureHex;
+                
+            } catch (error) {
+                console.error('❌ Signing failed:', error);
+                throw new Error('Failed to sign: ' + error.message);
+            }
+        }
+
+        // ============================================
+        // CONVEX API
+        // ============================================
+        
+        async function convexQuery(code) {
+            try {
+                const response = await fetch(`${CONVEX_URL}/api/v1/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address: userAddress,
+                        source: code
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Query failed: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                if (result.errorCode) {
+                    throw new Error(result.value || 'Query error');
+                }
+                
+                return result.value;
+            } catch (error) {
+                console.error('Query error:', error);
+                throw error;
+            }
+        }
+        
+        async function convexTransact(code) {
+            try {
+                console.log('📤 Preparing transaction...');
+                
+                // Prepare transaction
+                const prepareResponse = await fetch(`${CONVEX_URL}/api/v1/transaction/prepare`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address: userAddress,
+                        source: code
+                    })
+                });
+                
+                if (!prepareResponse.ok) {
+                    throw new Error(`Prepare failed: ${prepareResponse.status}`);
+                }
+                
+                const prepared = await prepareResponse.json();
+                console.log('✅ Transaction prepared');
+                
+                // Sign transaction
+                const signature = await signTransaction(prepared.hash, userPrivateKey);
+                
+                // Submit transaction
+                console.log('📤 Submitting transaction...');
+                const submitResponse = await fetch(`${CONVEX_URL}/api/v1/transaction/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address: userAddress,
+                        accountKey: ACCOUNT.publicKey,
+                        hash: prepared.hash,
+                        sig: signature
+                    })
+                });
+                
+                if (!submitResponse.ok) {
+                    const error = await submitResponse.text();
+                    throw new Error(`Submit failed: ${submitResponse.status} - ${error}`);
+                }
+                
+                const result = await submitResponse.json();
+                console.log('✅ Transaction submitted');
+                
+                if (result.errorCode) {
+                    throw new Error(result.value || 'Transaction error');
+                }
+                
+                return result;
+                
+            } catch (error) {
+                console.error('Transaction error:', error);
+                throw error;
+            }
+        }
+
+        // ============================================
+        // WALLET CONNECTION
+        // ============================================
+        
+        async function connectWallet() {
+            try {
+                console.log('🔌 Connecting to Convex...');
+                
+                userAddress = ACCOUNT.address;
+                userPrivateKey = ACCOUNT.privateKey;
+                
+                // Test connection
+                const accountData = await convexQuery(`(account ${userAddress})`);
+                console.log('✅ Account verified:', accountData);
+                
+                isConnected = true;
+                updateConnectionStatus(true);
+                updateWalletButton(userAddress);
+                updateSwapButton();
+                
+                document.getElementById('cvxBalance').classList.remove('hidden');
+                
+                await loadBalances();
+                
+                showNotification(`✅ Connected as ${userAddress}`, 'success');
+                
+            } catch (error) {
+                console.error('❌ Connection failed:', error);
+                showNotification('❌ Connection failed: ' + error.message, 'error');
+                isConnected = false;
+                userAddress = null;
+                userPrivateKey = null;
+            }
+        }
+        
+        function disconnectWallet() {
+            userAddress = null;
+            userPrivateKey = null;
+            isConnected = false;
+            
+            updateConnectionStatus(false);
+            updateWalletButton(null);
+            updateSwapButton();
+            
+            document.getElementById('fromBalance').textContent = 'Balance: --';
+            document.getElementById('toBalance').textContent = 'Balance: --';
+            document.getElementById('cvxBalance').classList.add('hidden');
+            document.getElementById('fromAmount').value = '';
+            document.getElementById('toAmount').value = '';
+            document.getElementById('txDetails').classList.add('hidden');
+            
+            showNotification('Disconnected', 'success');
+        }
+
+        // ============================================
+        // BALANCE LOADING
+        // ============================================
+        
+        async function loadBalances() {
+            if (!isConnected) return;
+            
+            try {
+                console.log('💰 Loading balances...');
+                
+                const fromTokenAddr = TOKENS[fromToken].address;
+                const toTokenAddr = TOKENS[toToken].address;
+                
+                // Load token balances
+                const fromBalance = await convexQuery(
+                    `(do (import convex.fungible :as fun) (fun/balance ${fromTokenAddr} ${userAddress}))`
+                );
+                const toBalance = await convexQuery(
+                    `(do (import convex.fungible :as fun) (fun/balance ${toTokenAddr} ${userAddress}))`
+                );
+                
+                // Load CVX balance
+                const cvxBalance = await convexQuery(`(balance ${userAddress})`);
+                
+                document.getElementById('fromBalance').textContent = 
+                    `Balance: ${fromBalance || 0}`;
+                document.getElementById('toBalance').textContent = 
+                    `Balance: ${toBalance || 0}`;
+                document.getElementById('cvxAmount').textContent = 
+                    (cvxBalance / 1000000).toFixed(6);
+                
+                console.log('✅ Balances loaded');
+                console.log(`  ${TOKENS[fromToken].symbol}: ${fromBalance}`);
+                console.log(`  ${TOKENS[toToken].symbol}: ${toBalance}`);
+                console.log(`  CVX: ${cvxBalance / 1000000}`);
+                
+            } catch (error) {
+                console.error('❌ Failed to load balances:', error);
+                showNotification('Failed to load balances', 'error');
+            }
+        }
+
+        // ============================================
+        // SWAP CALCULATIONS
+        // ============================================
+        
+        async function calculateSwapAmount() {
+            const fromAmount = parseFloat(document.getElementById('fromAmount').value);
+            
+            if (isNaN(fromAmount) || fromAmount <= 0) {
+                document.getElementById('toAmount').value = '';
+                document.getElementById('txDetails').classList.add('hidden');
+                updateSwapButton();
+                return;
+            }
+            
+            if (!isConnected) {
+                updateSwapButton();
+                return;
+            }
+            
+            try {
+                // Estimate output (simplified - actual calculation would query markets)
+                const estimatedOutput = fromAmount * 0.994; // ~0.6% fees
+                
+                document.getElementById('toAmount').value = estimatedOutput.toFixed(6);
+                document.getElementById('estimatedOutput').textContent = 
+                    `${estimatedOutput.toFixed(6)} ${TOKENS[toToken].symbol}`;
+                document.getElementById('txDetails').classList.remove('hidden');
+                
+                updateSwapButton();
+                
+            } catch (error) {
+                console.error('❌ Calculation failed:', error);
+            }
+        }
+
+        // ============================================
+        // SWAP EXECUTION
+        // ============================================
+        
+        async function executeSwap() {
+            const fromAmount = parseFloat(document.getElementById('fromAmount').value);
+            
+            if (!fromAmount || fromAmount <= 0) {
+                showNotification('❌ Enter a valid amount', 'error');
+                return;
+            }
+            
+            try {
+                const swapBtn = document.getElementById('swapBtn');
+                const swapBtnText = document.getElementById('swapBtnText');
+                swapBtn.disabled = true;
+                swapBtnText.textContent = 'Processing...';
+                
+                console.log('🔄 Executing Torus swap...');
+                console.log(`  From: ${fromAmount} ${TOKENS[fromToken].symbol}`);
+                console.log(`  To: ${TOKENS[toToken].symbol}`);
+                
+                const fromTokenAddr = TOKENS[fromToken].address;
+                const toTokenAddr = TOKENS[toToken].address;
+                
+                // Execute the swap on Torus
+                const swapCode = `
+                    (do
+                        (import torus.exchange :as torus)
+                        (torus/sell ${fromTokenAddr} ${Math.floor(fromAmount)} ${toTokenAddr})
+                    )
+                `;
+                
+                const result = await convexTransact(swapCode);
+                
+                console.log('✅ Swap successful!', result);
+                showNotification(`✅ Swap completed! Got ${result.value} tokens`, 'success');
+                
+                // Clear inputs
+                document.getElementById('fromAmount').value = '';
+                document.getElementById('toAmount').value = '';
+                document.getElementById('txDetails').classList.add('hidden');
+                
+                // Reload balances
+                setTimeout(loadBalances, 1000);
+                
+            } catch (error) {
+                console.error('❌ Swap failed:', error);
+                showNotification('❌ Swap failed: ' + error.message, 'error');
+            } finally {
+                updateSwapButton();
+            }
+        }
+
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
+        
+        document.getElementById('connectWalletBtn').addEventListener('click', () => {
+            if (isConnected) {
+                disconnectWallet();
+            } else {
+                connectWallet();
+            }
+        });
+        
+        document.getElementById('swapBtn').addEventListener('click', executeSwap);
+        document.getElementById('fromAmount').addEventListener('input', calculateSwapAmount);
+        document.getElementById('refreshBtn').addEventListener('click', loadBalances);
+        
+        document.getElementById('swapDirectionBtn').addEventListener('click', () => {
+            [fromToken, toToken] = [toToken, fromToken];
+            
+            document.getElementById('fromTokenSymbol').textContent = TOKENS[fromToken].symbol;
+            document.getElementById('toTokenSymbol').textContent = TOKENS[toToken].symbol;
+            
+            document.getElementById('fromAmount').value = '';
+            document.getElementById('toAmount').value = '';
+            document.getElementById('txDetails').classList.add('hidden');
+            
+            if (isConnected) loadBalances();
+        });
+        
+        // Use max balance when clicking balance text
+        document.getElementById('fromBalance').addEventListener('click', () => {
+            if (!isConnected) return;
+            const balanceText = document.getElementById('fromBalance').textContent;
+            const match = balanceText.match(/Balance: ([0-9.]+)/);
+            if (match) {
+                document.getElementById('fromAmount').value = match[1];
+                calculateSwapAmount();
+            }
+        });
+        
+        setTimeout(() => feather.replace(), 100);
+        
+        console.log('💡 Click "Connect Account #132" to start trading!');
     </script>
 </body>
 </html>
